@@ -1,0 +1,129 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Camera = workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+
+-- تحميل المكتبة
+local CoastingLibrary = loadstring(game:HttpGet("https://raw.githubusercontent.com/GhostDuckyy/UI-Libraries/main/Coasting%20Ui%20Lib/source.lua"))()
+
+-- إعدادات واجهة المستخدم
+local AimbotTab = CoastingLibrary:CreateTab("Aimbot.By.EX")
+local MainSection = AimbotTab:CreateSection("Main")
+local ConfigSection = AimbotTab:CreateSection("Config")
+local FlySection = AimbotTab:CreateSection("Fly")
+
+-- متغيرات الـ Aimbot
+local aimbotEnabled = false
+local fov = 100
+local fovColor = Color3.fromRGB(255, 255, 255)
+local fovVisible = true
+
+-- متغيرات الطيران
+local flyEnabled = false
+local flySpeed = 50  -- السرعة الابتدائية للطيران
+local bodyVelocity = nil
+
+-- دائرة FOV
+local fovCircle = Drawing.new("Circle")
+fovCircle.Color = fovColor
+fovCircle.Thickness = 1
+fovCircle.NumSides = 100
+fovCircle.Filled = false
+fovCircle.Radius = fov
+fovCircle.Visible = fovVisible
+
+-- تحديث موضع دائرة FOV
+RunService.RenderStepped:Connect(function()
+    fovCircle.Position = UserInputService:GetMouseLocation()
+    fovCircle.Visible = fovVisible
+end)
+
+-- زر تفعيل Aimbot
+MainSection:CreateToggle("Aimbot", function(state)
+   aimbotEnabled = state
+end)
+
+-- شريط FOV
+MainSection:CreateSlider("Field Of View", 0, 200, fov, false, function(value)
+   fov = value
+   fovCircle.Radius = fov
+end)
+
+-- لون دائرة FOV
+ConfigSection:CreateColorPicker("Field of View Color", fovColor, function(color)
+   fovColor = color
+   fovCircle.Color = color
+end)
+
+-- زر إظهار/إخفاء دائرة FOV
+ConfigSection:CreateToggle("Show FOV Circle", function(state)
+    fovVisible = state
+end)
+
+-- زر تفعيل الطيران
+FlySection:CreateToggle("Enable Fly", function(state)
+    flyEnabled = state
+
+    if flyEnabled then
+        -- إضافة خاصية الطيران
+        bodyVelocity = Instance.new("BodyVelocity")
+        bodyVelocity.MaxForce = Vector3.new(400000, 400000, 400000)  -- قوة كبيرة للطيران
+        bodyVelocity.Velocity = Vector3.new(0, 0, 0)  -- سرعة ابتدائية للطيران
+        bodyVelocity.Parent = LocalPlayer.Character.HumanoidRootPart
+    else
+        -- إيقاف الطيران
+        if bodyVelocity then
+            bodyVelocity:Destroy()
+            bodyVelocity = nil
+        end
+    end
+end)
+
+-- شريط لضبط سرعة الطيران
+FlySection:CreateSlider("Fly Speed", 0, 100, flySpeed, false, function(value)
+    flySpeed = value
+    if bodyVelocity then
+        bodyVelocity.Velocity = Vector3.new(0, flySpeed, 0)  -- تعيين السرعة للطيران
+    end
+end)
+
+-- البحث عن أقرب لاعب داخل دائرة FOV
+local function getClosestPlayer()
+    local closestPlayer = nil
+    local shortestDistance = fov
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("Head") then
+            local screenPoint, onScreen = Camera:WorldToViewportPoint(player.Character.Head.Position)
+            if onScreen then
+                local distance = (Vector2.new(screenPoint.X, screenPoint.Y) - UserInputService:GetMouseLocation()).Magnitude
+                if distance < shortestDistance then
+                    shortestDistance = distance
+                    closestPlayer = player
+                end
+            end
+        end
+    end
+
+    return closestPlayer
+end
+
+-- تنفيذ Aimbot عندما يكون مفعلًا
+RunService.RenderStepped:Connect(function()
+    if aimbotEnabled then
+        local target = getClosestPlayer()
+        if target and target.Character and target.Character:FindFirstChild("Head") then
+            local head = target.Character.Head.Position
+            -- توجيه الكاميرا نحو رأس اللاعب
+            Camera.CFrame = CFrame.new(Camera.CFrame.Position, head)
+        end
+    end
+
+    -- إذا كان الطيران مفعلًا
+    if flyEnabled and bodyVelocity then
+        local velocity = bodyVelocity.Velocity
+        -- تعيين السرعة للطيران بناءً على الاتجاه
+        bodyVelocity.Velocity = Vector3.new(velocity.X, flySpeed, velocity.Z)
+    end
+end)
